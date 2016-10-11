@@ -1,0 +1,126 @@
+---
+title: "Authors Data Summary"
+author: "Lacey Etzkorn"
+date: "October 10, 2016"
+output: 
+      html_document:
+            toc: TRUE
+---
+
+## Data Structure
+
+```{r setup}
+load(file="Data/June_Posts_Classified.RData")
+load(file="Data/June_Posts.RData")
+library(dplyr)
+library(ggplot2)
+options(width = 90)
+summary(user.data)
+```
+
+## Authors with too many posts
+
+We also know that reddit only allows us to request the most recent 1000 posts or comment from a user, so it is possible that users could have posted so often that we cannot see their record from June. We need to determine whether this is true. We can grab the earliest date from each author.
+
+```{r}
+author.sum =
+      user.data %>%
+      group_by(author, type) %>%
+      summarise(oldest = min(date),
+                prop.dep.post = mean(r.depression, na.rm=T),
+                n.post = n()) 
+get.date = function(day) as.POSIXct(day, origin = "1970-01-01", tz = "GMT")
+july1 = get.date("2016-07-01 00:00:00")
+june1 = get.date("2016-06-01 00:00:00")
+october1 = get.date("2016-10-01 00:00:00")
+jan1 = get.date("2016-01-01 00:00:00")
+
+ggplot(author.sum) + 
+      geom_histogram(aes(x=oldest, fill=type), alpha=0.6) +
+      geom_vline(aes(xintercept = as.numeric(june1))) + 
+      geom_vline(aes(xintercept = as.numeric(july1))) + 
+      facet_wrap("type")+
+      ggtitle("Date of Earliest Post or Comment")
+```
+
+We see that just one author had too many posts to make it all the way back to June. We will exclude this person from our analysis. Nearly `r length(new.june)` people had their oldest post in June, which may suggest that they also had too many posts, or they began their account in June and have not made more than 1,000 posts since.
+
+## Number of Posts per Author
+
+We can see the joint distribution of posts vs. comments. We can see that 59 people were bumping up against the barrier of 1000 comments and 2 people bumped up against the barrier of 1000 posts.
+
+```{r}
+ggplot(author.sum) +
+      geom_histogram(aes(x=n.post, fill=type)) +
+      facet_wrap("type")+
+      ggtitle("Number of Posts and Comments")
+```
+
+## Does 1000 post limit cut important data?
+
+We need to see whether the limit is going to strongly influence our analysis. For example, it would be great if we can observe all comments made in the 3 months prior to June. 
+
+```{r}
+ggplot(filter(author.sum, oldest > jan1)) +
+      geom_jitter(aes(x=n.post, y=oldest, color=type), alpha=0.5) +
+      ggtitle("Most Recent Post vs No of Posts")
+```
+
+This graph shows us that this will only be a problem for a few of our users. Two reached their 1000 post limit in late May, and one reached theirs in August. (We already identified this person.)
+
+## Proportion of Posts in /r/depression
+
+```{r}
+ggplot(author.sum)+
+      geom_histogram(aes(x=prop.dep.comm), fill="blue", alpha=0.5) +
+      geom_histogram(aes(x=prop.dep.post), fill="orange", alpha=0.5) +
+      ggtitle("Proportion of Comments in /r/depression")
+rm(author.sum, no.comments, no.data, no.posts, author.comm.sum, author.post.sum)
+```
+
+We can see that the user-specific proportion of posts in /r/depression has a U-shaped distribution. Many users post all of their comments in /r/depression, but many post very few. We should look at the proportion versus the total number of posts because it is very likely that some users will create throw-away accounts to post suicide notes.
+
+```{r}
+ggplot(author.sum)+
+      geom_point(aes(x=prop.dep.post, n.post), size=0.5, alpha=0.5) +
+      ggtitle("Proportion in /r/depression vs. Num Comments")
+rm(author.sum, no.comments, no.data, no.posts, author.comm.sum, author.post.sum)
+```
+
+## Distribution of Date/Post Times
+
+```{r}
+user.data = 
+      rbind(transmute(user.comment.data, author, subreddit_id,  
+                      date = get.date(created_utc), type="post"),
+            transmute(user.post.data, author, subreddit_id,  
+                      date = get.date(created_utc), type="comment")) %>%
+      mutate(id = as.numeric(as.factor(author)),
+             r.depression = subreddit_id=="t5_2qqqf")
+
+ggplot(subset(user.data, date > jan1)) +
+      geom_point(aes(y=id, x=date, color=type), alpha=0.3, size=0.1) +
+      ggtitle("Distribution of Post Dates across Authors\nbetween Jan. and Oct.") +
+      ylab("Author ID") + xlab("Date") +
+      geom_vline(aes(xintercept = as.numeric(july1)), alpha=0.3) + 
+      geom_vline(aes(xintercept = as.numeric(june1)), alpha=0.3) 
+ggplot(subset(user.data, date > jan1)) +
+      geom_point(aes(y=id, x=date, color=r.depression), alpha=0.3, size=0.1) +
+      ggtitle("Distribution of Post Dates across Authors\nbetween Jan. and Oct.") +
+      ylab("Author ID") + xlab("Date") +
+      geom_vline(aes(xintercept = as.numeric(july1)), alpha=0.3) + 
+      geom_vline(aes(xintercept = as.numeric(june1)), alpha=0.3) 
+ggplot(subset(user.data, date > jan1)) +
+      geom_histogram(aes(x=date, fill=r.depression), alpha=0.7, size=0.1) +
+      ggtitle("Distribution of Post Dates\nbetween Jan. and Oct.") +
+      ylab("Author ID") + xlab("Date") +
+      geom_vline(aes(xintercept = as.numeric(july1)), alpha=0.3) + 
+      geom_vline(aes(xintercept = as.numeric(june1)), alpha=0.3) 
+```
+
+## Discussion
+
+Online communities present a unique platform where people can address their own mental health concerns. 
+
+A online community such as the depression subreddit provides a unique opportunity for researchers to glimpse into the thoughts of people with depression outside of a clinical setting. The depression subreddit is a public community where users do not need to present any identifiable information. 
+
